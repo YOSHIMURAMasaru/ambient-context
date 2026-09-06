@@ -18,6 +18,7 @@ mod route;
 mod rules;
 mod segment;
 mod settings;
+pub mod skills;
 mod summarise;
 mod tray;
 mod update;
