@@ -5,6 +5,7 @@ import { DefragMap } from "./DefragMap";
 import { EyePanel } from "./EyePanel";
 import { RecentNotes } from "./RecentNotes";
 import { GITHUB_NEW_ISSUE, GITHUB_REPO } from "../lib/github";
+import { nudgeLabel, type SkillsStatus } from "../lib/skills";
 import { useDefragState } from "../lib/useDefragState";
 import type { AppStatus } from "../lib/status";
 import type { Settings } from "../lib/days";
@@ -21,18 +22,27 @@ export function Overview({
   status,
   onOpenDay,
   onOpenAgent,
+  onOpenSkills,
 }: {
   status: AppStatus;
   onOpenDay: (date: string) => void;
   onOpenAgent: () => void;
+  onOpenSkills: () => void;
 }) {
   const { capture, setCapture, ready } = status;
   const defrag = useDefragState();
   const [hasAgent, setHasAgent] = useState(false);
+  const [skillsNudge, setSkillsNudge] = useState<string | null>(null);
 
   useEffect(() => {
     void invoke<Settings>("get_settings").then((saved) =>
       setHasAgent(saved.agent !== null),
+    );
+  }, []);
+
+  useEffect(() => {
+    void invoke<SkillsStatus>("skills_status").then((next) =>
+      setSkillsNudge(nudgeLabel(next.state)),
     );
   }, []);
 
@@ -41,6 +51,11 @@ export function Overview({
       <div className="overview-preview">
         <EyePanel capture={capture} ready={ready} onCapture={setCapture} />
         <div className="overview-links">
+          {skillsNudge ? (
+            <button type="button" onClick={onOpenSkills}>
+              {skillsNudge}
+            </button>
+          ) : null}
           <button type="button" onClick={() => open(GITHUB_REPO)}>
             Star on GitHub
           </button>
