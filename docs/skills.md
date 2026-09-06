@@ -33,8 +33,9 @@ the shipped version back.
 **Remove** deletes the files the app wrote and leaves any you edited. The
 Overview does not ask again after a remove.
 
-Each install, update and remove is written to that day's ledger as
-`install_skills`, `update_skills` or `remove_skills`, with the paths.
+When a capture folder is set, each install, update and remove is written to
+that day's ledger as `install_skills`, `update_skills` or `remove_skills`,
+with the paths.
 
 ## The skills
 

@@ -105,6 +105,29 @@ describe("SkillsSettings", () => {
     expect(callsOf("install_skills")[1].args).toEqual({ force: true });
   });
 
+  it("offers Replace my edits while installed with an edited skill", async () => {
+    mockInvoke(
+      handler(
+        status({
+          state: "installed",
+          skills: [
+            {
+              name: "ambient-context",
+              description: "The core loop.",
+              edited_in: ["/Users/someone/.claude/skills"],
+              missing_in: [],
+            },
+          ],
+        }),
+      ),
+    );
+    render(<SkillsSettings />);
+    expect(await screen.findByText(/ambient-context has files you edited/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Replace my edits" }));
+    await waitFor(() => expect(callsOf("install_skills").length).toBe(1));
+    expect(callsOf("install_skills")[0].args).toEqual({ force: true });
+  });
+
   it("shows errors from the backend", async () => {
     mockInvoke(handler(status({ state: "partial", errors: ["/x/SKILL.md: Permission denied"] })));
     render(<SkillsSettings />);

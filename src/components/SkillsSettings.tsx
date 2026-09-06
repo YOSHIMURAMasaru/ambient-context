@@ -39,6 +39,10 @@ export function SkillsSettings() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const editedNames = (status?.skills ?? [])
+    .filter((skill) => skill.edited_in.length > 0)
+    .map((skill) => skill.name);
+
   return (
     <fieldset id={SKILLS_SETTINGS_ID}>
       <legend>Agent skills</legend>
@@ -78,10 +82,11 @@ export function SkillsSettings() {
             ) : null}
           </div>
 
-          {status.skipped.length > 0 ? (
+          {(status.skipped.length > 0 || status.skills.some((skill) => skill.edited_in.length > 0)) ? (
             <p className="settings-note">
-              {status.skipped.length === 1 ? "One file you edited was" : `${status.skipped.length} files you edited were`}{" "}
-              left alone: {status.skipped.join(", ")}.{" "}
+              {status.skipped.length > 0
+                ? `${status.skipped.length === 1 ? "One file you edited was" : `${status.skipped.length} files you edited were`} left alone: ${status.skipped.join(", ")}.`
+                : `${editedNames.join(", ")} ${editedNames.length === 1 ? "has" : "have"} files you edited, under the targets below.`}{" "}
               <button
                 type="button"
                 disabled={busy}

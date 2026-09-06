@@ -44,8 +44,9 @@ events in this inventory.
 `SKILL.md` files under `~/.claude/skills/` and `~/.agents/skills/`. They are
 plain-text instructions for an agent and contain none of your record. The
 app records what it wrote in `skills-install.json` in its data directory,
-overwrites only files it wrote, and deletes only those on Remove. Every
-install, update and remove is in that day's ledger. Nothing else is written
+overwrites only files it wrote, and deletes only those on Remove. When a
+capture folder is set, every install, update and remove is in that day's
+ledger. Nothing else is written
 outside the app's own data directory and your capture folder.
 
 ## What the capture path does not do

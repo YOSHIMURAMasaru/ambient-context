@@ -1729,18 +1729,22 @@ fn install_skills(app: tauri::AppHandle, force: bool) -> skills::Status {
         skills::State::Installed | skills::State::UpdateAvailable => "update_skills",
         _ => "install_skills",
     };
-    let outcome = skills::install(&home, &data_dir, force);
+    let mut outcome = skills::install(&home, &data_dir, force);
     if let Some(folder) = settings::load(&app).folder {
-        let _ = skills::record(&folder, action, &outcome);
+        if let Err(error) = skills::record(&folder, action, &outcome) {
+            outcome.status.errors.push(format!("ledger: {error}"));
+        }
     }
     outcome.status
 }
 
 #[tauri::command]
 fn remove_skills(app: tauri::AppHandle) -> skills::Status {
-    let outcome = skills::remove(&skills::home(), &skills_data_dir(&app));
+    let mut outcome = skills::remove(&skills::home(), &skills_data_dir(&app));
     if let Some(folder) = settings::load(&app).folder {
-        let _ = skills::record(&folder, "remove_skills", &outcome);
+        if let Err(error) = skills::record(&folder, "remove_skills", &outcome) {
+            outcome.status.errors.push(format!("ledger: {error}"));
+        }
     }
     outcome.status
 }

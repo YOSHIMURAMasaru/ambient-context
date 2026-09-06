@@ -20,8 +20,8 @@ Five agent skills ship inside the app and install with one click.
   edits.
 - **Overview:** an Install agent skills button above Star on GitHub until
   they are installed, and Update agent skills when a newer one ships.
-- **Ledger:** every install, update and remove is written to the day's
-  ledger with the paths.
+- **Ledger:** when a capture folder is set, every install, update and remove
+  is written to the day's ledger with the paths.
 - **Tests** hold every skill to the real tool surface: names, descriptions,
   declared tools, tools named in the body, and `docs/skills.md`.
 
