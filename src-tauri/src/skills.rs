@@ -367,6 +367,48 @@ pub fn remove(home: &Path, data_dir: &Path) -> Outcome {
     }
 }
 
+/// One ledger line per install, update or remove, listing every path that
+/// moved. The ledger is how the user later answers "when did this agent
+/// start behaving differently".
+pub fn record(folder: &Path, action: &str, outcome: &Outcome) -> std::io::Result<PathBuf> {
+    let mut lines = Vec::new();
+    lines.extend(
+        outcome
+            .written
+            .iter()
+            .map(|p| format!("written: {}", p.display())),
+    );
+    lines.extend(
+        outcome
+            .deleted
+            .iter()
+            .map(|p| format!("deleted: {}", p.display())),
+    );
+    lines.extend(
+        outcome
+            .skipped
+            .iter()
+            .map(|p| format!("skipped: {}", p.display())),
+    );
+    lines.extend(outcome.status.errors.iter().map(|e| format!("error: {e}")));
+    crate::ledger::append(
+        folder,
+        &crate::ledger::Entry {
+            at: chrono::Local::now(),
+            trigger: crate::ledger::Trigger::Settings,
+            action: action.to_string(),
+            prompt_id: None,
+            prompt_sha256: None,
+            engine: None,
+            inputs: Vec::new(),
+            output: Some(lines.join("\n")),
+            reasoning: None,
+            took_ms: None,
+            disposition: crate::ledger::Disposition::Applied,
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -651,5 +693,32 @@ mod tests {
         assert_eq!(out.written.len(), 5);
         assert_eq!(out.status.errors.len(), 5);
         assert_eq!(out.status.state, State::Partial);
+    }
+
+    #[test]
+    fn install_update_and_remove_each_leave_a_ledger_entry() {
+        let (home, data) = fresh();
+        let folder = tempfile::tempdir().unwrap();
+
+        let installed = install(home.path(), data.path(), false);
+        let path = record(folder.path(), "install_skills", &installed).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("install_skills"));
+        assert!(text.contains("written: "));
+        assert!(text.contains("ambient-context-standup/SKILL.md"));
+
+        let edited = home.path().join(".claude/skills/ambient-context/SKILL.md");
+        std::fs::write(&edited, "my edit").unwrap();
+        let updated = install(home.path(), data.path(), false);
+        record(folder.path(), "update_skills", &updated).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("update_skills"));
+        assert!(text.contains(&format!("skipped: {}", edited.display())));
+
+        let removed = remove(home.path(), data.path());
+        record(folder.path(), "remove_skills", &removed).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("remove_skills"));
+        assert!(text.contains("deleted: "));
     }
 }

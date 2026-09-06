@@ -1712,6 +1712,39 @@ fn mcp_registration(app: tauri::AppHandle) -> McpRegistration {
     }
 }
 
+fn skills_data_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
+    app.path().app_data_dir().unwrap_or_default()
+}
+
+#[tauri::command]
+fn skills_status(app: tauri::AppHandle) -> skills::Status {
+    skills::status(&skills::home(), &skills_data_dir(&app))
+}
+
+#[tauri::command]
+fn install_skills(app: tauri::AppHandle, force: bool) -> skills::Status {
+    let home = skills::home();
+    let data_dir = skills_data_dir(&app);
+    let action = match skills::status(&home, &data_dir).state {
+        skills::State::Installed | skills::State::UpdateAvailable => "update_skills",
+        _ => "install_skills",
+    };
+    let outcome = skills::install(&home, &data_dir, force);
+    if let Some(folder) = settings::load(&app).folder {
+        let _ = skills::record(&folder, action, &outcome);
+    }
+    outcome.status
+}
+
+#[tauri::command]
+fn remove_skills(app: tauri::AppHandle) -> skills::Status {
+    let outcome = skills::remove(&skills::home(), &skills_data_dir(&app));
+    if let Some(folder) = settings::load(&app).folder {
+        let _ = skills::record(&folder, "remove_skills", &outcome);
+    }
+    outcome.status
+}
+
 pub fn open_setup_window(app: &tauri::AppHandle) {
     sync_activation_policy(app, true);
     if let Some(window) = app.get_webview_window("setup") {
@@ -1802,6 +1835,9 @@ pub fn run() {
             discard_proposal,
             copy_context,
             mcp_registration,
+            skills_status,
+            install_skills,
+            remove_skills,
             take_pending_day,
             check_for_updates_now
         ])
