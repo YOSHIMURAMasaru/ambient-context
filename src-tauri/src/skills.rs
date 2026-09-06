@@ -134,7 +134,6 @@ fn read_manifest(data_dir: &Path) -> Option<Manifest> {
         .and_then(|raw| serde_json::from_str(&raw).ok())
 }
 
-#[allow(dead_code)]
 fn write_manifest(data_dir: &Path, manifest: &Manifest) -> std::io::Result<()> {
     fs::create_dir_all(data_dir)?;
     let json = serde_json::to_string_pretty(manifest).map_err(std::io::Error::other)?;
@@ -234,6 +233,137 @@ pub fn status(home: &Path, data_dir: &Path) -> Status {
         npx_command: NPX_COMMAND.to_string(),
         skipped: Vec::new(),
         errors: Vec::new(),
+    }
+}
+
+pub struct Outcome {
+    pub status: Status,
+    pub written: Vec<PathBuf>,
+    pub skipped: Vec<PathBuf>,
+    pub deleted: Vec<PathBuf>,
+}
+
+fn display(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
+}
+
+/// True when the app can claim the file: it matches the current bundle or
+/// the hash the manifest recorded. Anything else is the user's.
+fn app_wrote(on_disk: &str, bundled: &str, recorded: Option<&String>) -> bool {
+    on_disk == bundled || recorded.map(String::as_str) == Some(on_disk)
+}
+
+/// Writes every skill to every target. Serves Install, Update and the
+/// repair of a partial install alike; the result says which files moved.
+pub fn install(home: &Path, data_dir: &Path, force: bool) -> Outcome {
+    let previous = read_manifest(data_dir).unwrap_or_default();
+    let mut manifest = Manifest {
+        app_version: env!("CARGO_PKG_VERSION").to_string(),
+        installed_at: chrono::Local::now().to_rfc3339(),
+        removed_at: None,
+        targets: BTreeMap::new(),
+    };
+    let mut written = Vec::new();
+    let mut skipped = Vec::new();
+    let mut errors = Vec::new();
+    for target in targets(home) {
+        let mut entry = BTreeMap::new();
+        for skill in BUNDLED.iter() {
+            let path = skill_path(&target.path, skill.name);
+            let bundled = sha256_of(skill.body.as_bytes());
+            let on_disk = fs::read(&path).ok().map(|bytes| sha256_of(&bytes));
+            let recorded = previous
+                .targets
+                .get(&target.path)
+                .and_then(|t| t.get(skill.name));
+            if let Some(on_disk) = &on_disk {
+                if !force && !app_wrote(on_disk, &bundled, recorded) {
+                    skipped.push(path);
+                    continue;
+                }
+            }
+            if on_disk.as_deref() != Some(bundled.as_str()) {
+                let result = match path.parent() {
+                    Some(dir) => fs::create_dir_all(dir).and_then(|_| fs::write(&path, skill.body)),
+                    None => Err(std::io::Error::other("no parent directory")),
+                };
+                if let Err(error) = result {
+                    errors.push(format!("{}: {error}", display(&path)));
+                    continue;
+                }
+                written.push(path);
+            }
+            entry.insert(skill.name.to_string(), bundled);
+        }
+        manifest.targets.insert(target.path.clone(), entry);
+    }
+    if let Err(error) = write_manifest(data_dir, &manifest) {
+        errors.push(format!("{}: {error}", display(&manifest_path(data_dir))));
+    }
+    let mut status = status(home, data_dir);
+    status.skipped = skipped.iter().map(|p| display(p)).collect();
+    status.errors = errors;
+    Outcome {
+        status,
+        written,
+        skipped,
+        deleted: Vec::new(),
+    }
+}
+
+/// Deletes the files the app wrote and nothing else. The manifest stays,
+/// marked removed, so the Overview does not ask again.
+pub fn remove(home: &Path, data_dir: &Path) -> Outcome {
+    let mut manifest = read_manifest(data_dir).unwrap_or_default();
+    let mut deleted = Vec::new();
+    let mut skipped = Vec::new();
+    let mut errors = Vec::new();
+    for target in targets(home) {
+        let recorded = manifest
+            .targets
+            .get(&target.path)
+            .cloned()
+            .unwrap_or_default();
+        let mut kept = BTreeMap::new();
+        for skill in BUNDLED.iter() {
+            let path = skill_path(&target.path, skill.name);
+            let Ok(bytes) = fs::read(&path) else { continue };
+            let on_disk = sha256_of(&bytes);
+            if !app_wrote(
+                &on_disk,
+                &sha256_of(skill.body.as_bytes()),
+                recorded.get(skill.name),
+            ) {
+                if let Some(hash) = recorded.get(skill.name) {
+                    kept.insert(skill.name.to_string(), hash.clone());
+                }
+                skipped.push(path);
+                continue;
+            }
+            match fs::remove_file(&path) {
+                Ok(()) => {
+                    if let Some(dir) = path.parent() {
+                        let _ = fs::remove_dir(dir);
+                    }
+                    deleted.push(path);
+                }
+                Err(error) => errors.push(format!("{}: {error}", display(&path))),
+            }
+        }
+        manifest.targets.insert(target.path.clone(), kept);
+    }
+    manifest.removed_at = Some(chrono::Local::now().to_rfc3339());
+    if let Err(error) = write_manifest(data_dir, &manifest) {
+        errors.push(format!("{}: {error}", display(&manifest_path(data_dir))));
+    }
+    let mut status = status(home, data_dir);
+    status.skipped = skipped.iter().map(|p| display(p)).collect();
+    status.errors = errors;
+    Outcome {
+        status,
+        written: Vec::new(),
+        skipped,
+        deleted,
     }
 }
 
@@ -363,5 +493,163 @@ mod tests {
         let result = status(home.path(), data.path());
         assert_eq!(result.state, State::Installed);
         assert_eq!(result.skills[2].edited_in, vec![claude.clone()]);
+    }
+
+    #[test]
+    fn fresh_install_writes_every_skill_to_both_targets() {
+        let (home, data) = fresh();
+        let out = install(home.path(), data.path(), false);
+        assert_eq!(out.written.len(), 10);
+        assert!(out.skipped.is_empty());
+        assert!(home
+            .path()
+            .join(".claude/skills/ambient-context/SKILL.md")
+            .exists());
+        assert!(home
+            .path()
+            .join(".agents/skills/ambient-context-tune-rules/SKILL.md")
+            .exists());
+        assert_eq!(out.status.state, State::Installed);
+        assert!(out.status.errors.is_empty());
+        let manifest: Manifest =
+            serde_json::from_str(&std::fs::read_to_string(manifest_path(data.path())).unwrap())
+                .unwrap();
+        assert_eq!(manifest.app_version, env!("CARGO_PKG_VERSION"));
+        assert!(manifest.removed_at.is_none());
+        assert_eq!(manifest.targets.len(), 2);
+        assert_eq!(manifest.targets.values().next().unwrap().len(), 5);
+    }
+
+    #[test]
+    fn installing_again_writes_nothing() {
+        let (home, data) = fresh();
+        install(home.path(), data.path(), false);
+        let again = install(home.path(), data.path(), false);
+        assert!(again.written.is_empty());
+        assert_eq!(again.status.state, State::Installed);
+    }
+
+    #[test]
+    fn a_missing_target_is_partial_and_install_repairs_it() {
+        let (home, data) = fresh();
+        install(home.path(), data.path(), false);
+        std::fs::remove_dir_all(home.path().join(".agents")).unwrap();
+        assert_eq!(status(home.path(), data.path()).state, State::Partial);
+        let repaired = install(home.path(), data.path(), false);
+        assert_eq!(repaired.written.len(), 5);
+        assert_eq!(repaired.status.state, State::Installed);
+    }
+
+    #[test]
+    fn an_edited_file_is_kept_unless_forced() {
+        let (home, data) = fresh();
+        install(home.path(), data.path(), false);
+        let edited = home.path().join(".claude/skills/ambient-context/SKILL.md");
+        std::fs::write(&edited, "my edit").unwrap();
+
+        let out = install(home.path(), data.path(), false);
+        assert_eq!(out.skipped, vec![edited.clone()]);
+        assert!(out.written.is_empty());
+        assert_eq!(std::fs::read_to_string(&edited).unwrap(), "my edit");
+        assert_eq!(
+            out.status.skipped,
+            vec![edited.to_string_lossy().into_owned()]
+        );
+        assert_eq!(out.status.skills[0].edited_in.len(), 1);
+
+        let forced = install(home.path(), data.path(), true);
+        assert_eq!(forced.written, vec![edited.clone()]);
+        assert_eq!(std::fs::read_to_string(&edited).unwrap(), BUNDLED[0].body);
+        assert!(forced.status.skills[0].edited_in.is_empty());
+    }
+
+    #[test]
+    fn a_file_the_app_wrote_under_an_older_bundle_is_overwritten() {
+        let (home, data) = fresh();
+        install(home.path(), data.path(), false);
+        let older = "older body";
+        let path = home
+            .path()
+            .join(".agents/skills/ambient-context-standup/SKILL.md");
+        std::fs::write(&path, older).unwrap();
+        let mut manifest: Manifest =
+            serde_json::from_str(&std::fs::read_to_string(manifest_path(data.path())).unwrap())
+                .unwrap();
+        let agents = targets(home.path())[1].path.clone();
+        manifest.targets.get_mut(&agents).unwrap().insert(
+            "ambient-context-standup".into(),
+            crate::ledger::sha256_of(older.as_bytes()),
+        );
+        write_manifest_for_test(data.path(), &manifest);
+        assert_eq!(
+            status(home.path(), data.path()).state,
+            State::UpdateAvailable
+        );
+
+        let out = install(home.path(), data.path(), false);
+        assert_eq!(out.written, vec![path.clone()]);
+        assert_eq!(out.status.state, State::Installed);
+    }
+
+    #[test]
+    fn a_file_the_app_never_wrote_is_treated_as_the_users() {
+        let (home, data) = fresh();
+        let theirs = home.path().join(".agents/skills/ambient-context/SKILL.md");
+        std::fs::create_dir_all(theirs.parent().unwrap()).unwrap();
+        std::fs::write(&theirs, "installed by npx, then edited").unwrap();
+        let out = install(home.path(), data.path(), false);
+        assert_eq!(out.written.len(), 9);
+        assert_eq!(out.skipped, vec![theirs.clone()]);
+        assert_eq!(
+            std::fs::read_to_string(&theirs).unwrap(),
+            "installed by npx, then edited"
+        );
+    }
+
+    #[test]
+    fn remove_deletes_app_written_files_and_keeps_edits() {
+        let (home, data) = fresh();
+        install(home.path(), data.path(), false);
+        let edited = home
+            .path()
+            .join(".claude/skills/ambient-context-standup/SKILL.md");
+        std::fs::write(&edited, "my edit").unwrap();
+
+        let out = remove(home.path(), data.path());
+        assert_eq!(out.deleted.len(), 9);
+        assert_eq!(out.skipped, vec![edited.clone()]);
+        assert!(edited.exists());
+        assert!(!home.path().join(".claude/skills/ambient-context").exists());
+        assert!(!home
+            .path()
+            .join(".agents/skills/ambient-context-standup/SKILL.md")
+            .exists());
+        assert_eq!(out.status.state, State::Removed);
+        let manifest: Manifest =
+            serde_json::from_str(&std::fs::read_to_string(manifest_path(data.path())).unwrap())
+                .unwrap();
+        assert!(manifest.removed_at.is_some());
+    }
+
+    #[test]
+    fn install_after_remove_is_installed_again() {
+        let (home, data) = fresh();
+        install(home.path(), data.path(), false);
+        remove(home.path(), data.path());
+        let out = install(home.path(), data.path(), false);
+        assert_eq!(out.written.len(), 10);
+        assert_eq!(out.status.state, State::Installed);
+    }
+
+    #[test]
+    fn an_unwritable_target_is_reported_not_fatal() {
+        let (home, data) = fresh();
+        // A file where the directory should be: create_dir_all fails.
+        std::fs::create_dir_all(home.path().join(".agents")).unwrap();
+        std::fs::write(home.path().join(".agents/skills"), "not a directory").unwrap();
+        let out = install(home.path(), data.path(), false);
+        assert_eq!(out.written.len(), 5);
+        assert_eq!(out.status.errors.len(), 5);
+        assert_eq!(out.status.state, State::Partial);
     }
 }
