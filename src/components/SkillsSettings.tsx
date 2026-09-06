@@ -85,8 +85,8 @@ export function SkillsSettings() {
           {(status.skipped.length > 0 || status.skills.some((skill) => skill.edited_in.length > 0)) ? (
             <p className="settings-note">
               {status.skipped.length > 0
-                ? `${status.skipped.length === 1 ? "One file you edited was" : `${status.skipped.length} files you edited were`} left alone: ${status.skipped.join(", ")}.`
-                : `${editedNames.join(", ")} ${editedNames.length === 1 ? "has" : "have"} files you edited, under the targets below.`}{" "}
+                ? `Left alone, because you edited ${status.skipped.length === 1 ? "it" : "them"} or another tool put ${status.skipped.length === 1 ? "it" : "them"} there: ${status.skipped.join(", ")}.`
+                : `Edited by you: ${editedNames.join(", ")}. Install and Update leave edited files alone.`}{" "}
               <button
                 type="button"
                 disabled={busy}

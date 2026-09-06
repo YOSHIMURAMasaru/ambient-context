@@ -46,8 +46,9 @@ plain-text instructions for an agent and contain none of your record. The
 app records what it wrote in `skills-install.json` in its data directory,
 overwrites only files it wrote, and deletes only those on Remove. When a
 capture folder is set, every install, update and remove is in that day's
-ledger. Nothing else is written
-outside the app's own data directory and your capture folder.
+ledger. A skill folder that another installer symlinked into place is
+never written through or deleted. Nothing else is written outside the app's
+own data directory and your capture folder.
 
 ## What the capture path does not do
 

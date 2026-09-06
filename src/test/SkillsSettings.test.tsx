@@ -98,7 +98,7 @@ describe("SkillsSettings", () => {
     mockInvoke(handler(status(), skipped));
     render(<SkillsSettings />);
     fireEvent.click(await screen.findByRole("button", { name: "Install" }));
-    expect(await screen.findByText(/left alone/)).toBeTruthy();
+    expect(await screen.findByText(/Left alone/)).toBeTruthy();
     expect(screen.getByText("edited")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Replace my edits" }));
     await waitFor(() => expect(callsOf("install_skills").length).toBe(2));
@@ -122,7 +122,7 @@ describe("SkillsSettings", () => {
       ),
     );
     render(<SkillsSettings />);
-    expect(await screen.findByText(/ambient-context has files you edited/)).toBeTruthy();
+    expect(await screen.findByText(/Edited by you: ambient-context/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Replace my edits" }));
     await waitFor(() => expect(callsOf("install_skills").length).toBe(1));
     expect(callsOf("install_skills")[0].args).toEqual({ force: true });

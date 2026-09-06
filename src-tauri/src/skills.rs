@@ -253,6 +253,19 @@ fn app_wrote(on_disk: &str, bundled: &str, recorded: Option<&String>) -> bool {
     on_disk == bundled || recorded.map(String::as_str) == Some(on_disk)
 }
 
+/// `npx skills add` symlinks a skill folder into place by default, and the
+/// link's content can equal the bundle byte for byte. Writing through it
+/// would edit another installer's store and deleting through it would
+/// empty that store, so a linked skill is never ours, whatever it contains.
+fn is_symlinked(path: &Path) -> bool {
+    let linked = |p: &Path| {
+        fs::symlink_metadata(p)
+            .map(|meta| meta.file_type().is_symlink())
+            .unwrap_or(false)
+    };
+    linked(path) || path.parent().is_some_and(linked)
+}
+
 /// Writes every skill to every target. Serves Install, Update and the
 /// repair of a partial install alike; the result says which files moved.
 pub fn install(home: &Path, data_dir: &Path, force: bool) -> Outcome {
@@ -270,6 +283,10 @@ pub fn install(home: &Path, data_dir: &Path, force: bool) -> Outcome {
         let mut entry = BTreeMap::new();
         for skill in BUNDLED.iter() {
             let path = skill_path(&target.path, skill.name);
+            if is_symlinked(&path) {
+                skipped.push(path);
+                continue;
+            }
             let bundled = sha256_of(skill.body.as_bytes());
             let on_disk = fs::read(&path).ok().map(|bytes| sha256_of(&bytes));
             let recorded = previous
@@ -327,6 +344,13 @@ pub fn remove(home: &Path, data_dir: &Path) -> Outcome {
         let mut kept = BTreeMap::new();
         for skill in BUNDLED.iter() {
             let path = skill_path(&target.path, skill.name);
+            if is_symlinked(&path) {
+                if let Some(hash) = recorded.get(skill.name) {
+                    kept.insert(skill.name.to_string(), hash.clone());
+                }
+                skipped.push(path);
+                continue;
+            }
             let Ok(bytes) = fs::read(&path) else { continue };
             let on_disk = sha256_of(&bytes);
             if !app_wrote(
@@ -693,6 +717,31 @@ mod tests {
         assert_eq!(out.written.len(), 5);
         assert_eq!(out.status.errors.len(), 5);
         assert_eq!(out.status.state, State::Partial);
+    }
+
+    #[test]
+    fn a_symlinked_skill_from_another_installer_is_left_alone() {
+        let (home, data) = fresh();
+        let store = tempfile::tempdir().unwrap();
+        let canonical = store.path().join("ambient-context");
+        std::fs::create_dir_all(&canonical).unwrap();
+        std::fs::write(canonical.join("SKILL.md"), BUNDLED[0].body).unwrap();
+        let link = home.path().join(".claude/skills/ambient-context");
+        std::fs::create_dir_all(link.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&canonical, &link).unwrap();
+
+        // Even forced: force is about the user's edits, not another tool's
+        // store.
+        let out = install(home.path(), data.path(), true);
+        assert_eq!(out.written.len(), 9);
+        assert_eq!(out.skipped, vec![link.join("SKILL.md")]);
+        assert_eq!(out.status.state, State::Installed);
+
+        let out = remove(home.path(), data.path());
+        assert_eq!(out.deleted.len(), 9);
+        assert_eq!(out.skipped, vec![link.join("SKILL.md")]);
+        assert!(canonical.join("SKILL.md").exists());
+        assert!(link.exists());
     }
 
     #[test]
