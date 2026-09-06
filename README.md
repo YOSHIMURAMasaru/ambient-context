@@ -66,7 +66,8 @@ Three files per day, each one useful on its own:
 3. **Ask.** Register the app as an MCP server in Claude Code, Claude
    Desktop, Cursor or Zed, or just point an agent at the folder. Twenty
    tools cover reading days, searching the record, reading the knowledge
-   and notes, and controlling capture.
+   and notes, and controlling capture. Install the bundled skills from
+   Settings and the agent also knows when to reach for them.
 
 <p align="center">
   <img src="docs/screenshots/agent.png" width="720" alt="Agent tab: Claude Code connected, with separate Context and Notes model pickers and a daily schedule" />
@@ -170,6 +171,12 @@ Claude Desktop, Cursor, Zed and generic stdio clients are covered in
 [docs/mcp.md](docs/mcp.md). Read tools work whether or not the app is
 running. Anything that changes state goes through the running app, so
 every write lands in the day's ledger with your client's name on it.
+
+Settings > Agent skills installs five skills (catch me up, standup, weekly
+review, tune rules, and the core loop they share) into `~/.claude/skills/`
+and `~/.agents/skills/`, which Claude Code, Cursor, Codex, Zed, Copilot,
+Gemini CLI, Goose and OpenCode all read. Details in
+[docs/skills.md](docs/skills.md).
 
 ## What a day looks like
 
