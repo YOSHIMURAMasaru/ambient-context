@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.1.2
+
+The login item follows the installed app, and a crash at launch leaves
+its message on disk.
+
+### Launch at login
+
+- **The login item is checked against the running app, not just for
+  existence.** Turning launch at login on from a build under `target/`
+  wrote a login item naming that binary, and every login since started
+  the stale dev build beside the installed app because the startup check
+  only asked whether a login item existed. The check now reads the
+  program the login item names and rewrites it when an installed app
+  finds it pointing elsewhere. A build that is not under an Applications
+  folder never writes a login item.
+
+### Diagnostics
+
+- **`panic.log`** in the app's data folder. A panic during startup runs
+  inside a system callback that cannot unwind, so the process aborts and
+  the crash report records only the abort. The message now goes to
+  `panic.log` first, with the thread and source location.
+
 ## 1.1.1
 
 Fixes a crash when the app's own window was brought to the front while
