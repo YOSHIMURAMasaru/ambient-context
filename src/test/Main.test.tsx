@@ -92,6 +92,15 @@ function handler(command: string) {
         running: false,
         last_write: null,
       };
+    case "skills_status":
+      return {
+        state: "installed",
+        skills: [],
+        targets: [],
+        npx_command: "npx skills add dragthelake/ambient-context",
+        skipped: [],
+        errors: [],
+      };
     case "agent_detect":
       return [];
     case "get_prompt":

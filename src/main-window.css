@@ -1233,6 +1233,16 @@ input[type="time"]:focus-visible {
   margin-top: 10px;
 }
 
+.skills-list {
+  list-style: none;
+  margin: 6px 0 8px;
+  padding: 0;
+}
+
+.skills-list li {
+  margin-bottom: 6px;
+}
+
 
 
 

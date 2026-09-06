@@ -4,6 +4,7 @@ import { AgentTab } from "./AgentTab";
 import { AppSettings } from "./AppSettings";
 import { DayView } from "./DayView";
 import { McpSettings } from "./McpSettings";
+import { SkillsSettings } from "./SkillsSettings";
 import { Overview } from "./Overview";
 import { RecordingSettings } from "./RecordingSettings";
 import { RulesSettings } from "./RulesSettings";
@@ -109,6 +110,7 @@ export function Main() {
               <RulesSettings />
               <AppSettings />
               <McpSettings />
+              <SkillsSettings />
             </div>
           )}
         </div>
