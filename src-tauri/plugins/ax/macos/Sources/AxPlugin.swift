@@ -150,6 +150,18 @@ public func ambientAxSnapshot() -> SRString {
         return SRString("ERROR: no frontmost application")
     }
 
+    // This app's own window is never read. An accessibility query on the
+    // calling process does not cross a process boundary: HIServices answers
+    // it in-process, straight into AppKit's NSWindow accessors, and those
+    // trap when called off the main thread. Seen as a SIGTRAP ("Must only
+    // be used from the main thread") the moment a poll tick lands while the
+    // window has just been brought to the front from the Dock. The Rust
+    // side already treats a look at the app itself as not work, so an error
+    // here costs nothing that was wanted.
+    if frontmost.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+        return SRString("ERROR: own window in front")
+    }
+
     let appName = frontmost.localizedName ?? "Unknown"
     let appElement = AXUIElementCreateApplication(frontmost.processIdentifier)
 

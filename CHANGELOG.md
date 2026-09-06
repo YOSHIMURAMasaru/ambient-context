@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.1
+
+Fixes a crash when the app's own window was brought to the front while
+capture was running.
+
+### Capture
+
+- **No self-capture crash.** The accessibility snapshot never reads this
+  app's own window. A query on the calling process is answered inside
+  AppKit on the poll thread rather than over IPC, and AppKit trapped on it
+  ("Must only be used from the main thread") the moment a poll landed just
+  after a Dock click had shown the window. The poll now skips its own
+  window outright, which also closes the open block, the same as a locked
+  screen: looking at Ambient Context is not work to record.
+
 ## 1.1.0
 
 Five agent skills ship inside the app and install with one click.
