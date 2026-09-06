@@ -4,6 +4,7 @@ import { AgentTab } from "./AgentTab";
 import { AppSettings } from "./AppSettings";
 import { DayView } from "./DayView";
 import { McpSettings } from "./McpSettings";
+import { SKILLS_SETTINGS_ID, SkillsSettings } from "./SkillsSettings";
 import { Overview } from "./Overview";
 import { RecordingSettings } from "./RecordingSettings";
 import { RulesSettings } from "./RulesSettings";
@@ -32,12 +33,27 @@ function tabFromLocation(): Tab {
 export function Main() {
   const [tab, setTab] = useState<Tab>(tabFromLocation);
   const [contextDate, setContextDate] = useState<string | null>(null);
+  const [settingsAnchor, setSettingsAnchor] = useState<string | null>(null);
   const status = useAppStatus();
 
   const openDay = (date: string) => {
     setContextDate(date);
     setTab("context");
   };
+
+  const openSkills = () => {
+    setSettingsAnchor(SKILLS_SETTINGS_ID);
+    setTab("settings");
+  };
+
+  // The settings panels mount with the tab, so the fieldset exists by the
+  // time this effect runs. jsdom has no scrollIntoView; the optional call
+  // keeps the tests honest about that rather than stubbing it.
+  useEffect(() => {
+    if (tab !== "settings" || !settingsAnchor) return;
+    document.getElementById(settingsAnchor)?.scrollIntoView?.({ block: "start" });
+    setSettingsAnchor(null);
+  }, [tab, settingsAnchor]);
 
   // Tray Settings on an already-open window. A cold open carries ?tab= in
   // the URL instead, which survives React Strict Mode's remount.
@@ -98,7 +114,12 @@ export function Main() {
             the bevel and never scrolls; this one scrolls inside it. */}
         <div className="tabpane-scroll">
           {tab === "overview" && (
-            <Overview status={status} onOpenDay={openDay} onOpenAgent={() => setTab("agent")} />
+            <Overview
+              status={status}
+              onOpenDay={openDay}
+              onOpenAgent={() => setTab("agent")}
+              onOpenSkills={openSkills}
+            />
           )}
           {tab === "context" && <DayView date={contextDate ?? undefined} />}
           {tab === "agent" && <AgentTab />}
@@ -109,6 +130,7 @@ export function Main() {
               <RulesSettings />
               <AppSettings />
               <McpSettings />
+              <SkillsSettings />
             </div>
           )}
         </div>

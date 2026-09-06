@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.1.0
+
+Five agent skills ship inside the app and install with one click.
+
+### Agent skills
+
+- **Five skills** in the binary: `ambient-context` (the core loop: what the
+  record is, which tool answers which question, restraint, privacy),
+  `ambient-context-catch-me-up`, `ambient-context-standup`,
+  `ambient-context-weekly-review` and `ambient-context-tune-rules`. The
+  source is `skills/` in the repository, so
+  `npx skills add dragthelake/ambient-context` works too.
+- **Settings > Agent skills:** Install writes them to `~/.claude/skills/`
+  and `~/.agents/skills/`, which Claude Code, Cursor, Codex, Zed, Copilot,
+  Gemini CLI, Goose and OpenCode read. Update appears when a release changes
+  a skill. Remove deletes only what the app wrote. A `SKILL.md` you have
+  edited is never overwritten or deleted without a click on Replace my
+  edits.
+- **Overview:** an Install agent skills button above Star on GitHub until
+  they are installed, and Update agent skills when a newer one ships.
+- **Ledger:** when a capture folder is set, every install, update and remove
+  is written to the day's ledger with the paths.
+- **Tests** hold every skill to the real tool surface: names, descriptions,
+  declared tools, tools named in the body, and `docs/skills.md`.
+
+### Docs
+
+- `docs/skills.md` covers each skill, the install paths, the npx route and
+  what happens to edited files. The privacy document lists the two
+  directories the app now writes outside its own.
+
 ## 1.0.1
 
 The app now updates itself. A 1.0.0 install has no updater and must be

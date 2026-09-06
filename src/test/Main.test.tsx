@@ -92,6 +92,15 @@ function handler(command: string) {
         running: false,
         last_write: null,
       };
+    case "skills_status":
+      return {
+        state: "installed",
+        skills: [],
+        targets: [],
+        npx_command: "npx skills add dragthelake/ambient-context",
+        skipped: [],
+        errors: [],
+      };
     case "agent_detect":
       return [];
     case "get_prompt":
@@ -143,6 +152,21 @@ function handler(command: string) {
     default:
       throw new Error(`unexpected command ${command}`);
   }
+}
+
+/// The base handler with a different skills state, for the nudge tests.
+function withSkills(state: string) {
+  return (command: string) =>
+    command === "skills_status"
+      ? {
+          state,
+          skills: [],
+          targets: [],
+          npx_command: "npx skills add dragthelake/ambient-context",
+          skipped: [],
+          errors: [],
+        }
+      : handler(command);
 }
 
 afterEach(cleanup);
@@ -280,5 +304,38 @@ describe("the main window's tab strip", () => {
         screen.getByRole("tab", { name: "Agent" }).getAttribute("aria-selected"),
       ).toBe("true"),
     );
+  });
+
+  it("nudges to install agent skills when none are installed", async () => {
+    mockInvoke(withSkills("never_installed"));
+    render(<Main />);
+    expect(await screen.findByRole("button", { name: "Install agent skills" })).toBeTruthy();
+  });
+
+  it("nudges to update when the bundle is newer, and not at all when current or removed", async () => {
+    mockInvoke(withSkills("update_available"));
+    const { unmount } = render(<Main />);
+    expect(await screen.findByRole("button", { name: "Update agent skills" })).toBeTruthy();
+    unmount();
+
+    for (const state of ["installed", "removed"]) {
+      mockInvoke(withSkills(state));
+      const view = render(<Main />);
+      await screen.findByRole("button", { name: "Star on GitHub" });
+      expect(screen.queryByRole("button", { name: /agent skills/ })).toBeNull();
+      view.unmount();
+    }
+  });
+
+  it("opens the Agent skills section from the nudge", async () => {
+    mockInvoke(withSkills("never_installed"));
+    render(<Main />);
+    fireEvent.click(await screen.findByRole("button", { name: "Install agent skills" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("tab", { name: "Settings" }).getAttribute("aria-selected"),
+      ).toBe("true"),
+    );
+    expect(await screen.findByText("Agent skills")).toBeTruthy();
   });
 });
