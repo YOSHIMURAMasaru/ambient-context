@@ -1,4 +1,5 @@
 mod agent;
+mod autostart;
 mod capture;
 mod cite;
 mod control;
@@ -8,6 +9,7 @@ mod ipc;
 mod jobs;
 mod ledger;
 pub mod mcp;
+mod panic_log;
 mod prompt;
 mod propose;
 mod prune;
@@ -1846,6 +1848,13 @@ pub fn run() {
             check_for_updates_now
         ])
         .setup(|app| {
+            // First, so that a panic anywhere below leaves its message on
+            // disk. This closure runs inside AppKit's did_finish_launching,
+            // which cannot unwind, so a panic here aborts and the crash
+            // report carries only the abort, never the message.
+            if let Ok(dir) = app.path().app_data_dir() {
+                panic_log::install(dir.join("panic.log"));
+            }
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
@@ -1896,15 +1905,26 @@ pub fn run() {
             let config = settings::load(app.handle());
             {
                 // A login item removed in System Settings must not leave the
-                // toggle claiming otherwise: reconcile once at startup.
+                // toggle claiming otherwise, and one that names a different
+                // build (a dev binary, or a bundle since moved) must not
+                // keep starting it: reconcile once at startup.
                 let manager = app.autolaunch();
-                let registered = manager.is_enabled().unwrap_or(false);
-                let synced = if config.launch_at_login && !registered {
-                    manager.enable()
-                } else if !config.launch_at_login && registered {
-                    manager.disable()
-                } else {
-                    Ok(())
+                let registered = autostart::plist_path(&app.package_info().name)
+                    .and_then(|plist| autostart::registered_program(&plist));
+                let current = std::env::current_exe().unwrap_or_default();
+                let action =
+                    autostart::action(config.launch_at_login, registered.as_deref(), &current);
+                if let (Some(autostart::Action::Enable), Some(old)) = (&action, &registered) {
+                    eprintln!(
+                        "[autostart] login item named {}, rewritten for {}",
+                        old.display(),
+                        current.display()
+                    );
+                }
+                let synced = match action {
+                    Some(autostart::Action::Enable) => manager.enable(),
+                    Some(autostart::Action::Disable) => manager.disable(),
+                    None => Ok(()),
                 };
                 if let Err(error) = synced {
                     eprintln!("[autostart] could not update the login item: {error}");

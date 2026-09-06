@@ -8,6 +8,7 @@ Open an issue at <https://github.com/dragthelake/ambient-context/issues>.
 - **What you did and what you expected.** One or two sentences each.
 - **The ledger entry**, if the problem is a summary, an ingest, a rule change or a setting change. Open the capture folder, then `Ledger/YYYY-MM-DD.md` for the day it happened, and paste the entry (each starts with `## HH:MM:SS · action`). It names the prompt, the agent, the inputs by hash, and how the run ended.
 - **The rejected output**, if the ledger says `rejected`. It is kept at `~/Library/Application Support/com.0x0000007a.ambientcontext/rejected/`, named by date (and by call for ingest). Read it before attaching it; it is the model's answer about your day.
+- **`panic.log`**, if the app quit on its own or would not start. It is kept at `~/Library/Application Support/com.0x0000007a.ambientcontext/panic.log`, one line per crash with the time, the thread and the source location. The macOS crash report for a crash at launch does not carry the message; this file does.
 - **Console lines**, if the app misbehaved rather than a run. `Console.app`, filter on `ambient-context`. Lines are prefixed `[capture]`, `[ax]`, `[writer]`, `[redact]`, `[jobs]`.
 
 ## What not to include
